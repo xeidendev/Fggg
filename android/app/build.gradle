@@ -1,0 +1,84 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// v5.0: release keystore (shipped with the project so future updates keep
+// the same signature). See android/key.properties for the credentials.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace = "com.Exilux.arrow_puzzle"
+    compileSdk = 35
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        applicationId = "com.Exilux.arrow_puzzle"
+        // v3.5.5: minSdk 24 — Google Play's automatic protection rejects app
+        // bundles with minSdkVersion below 24.
+        minSdk = 24
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+
+        // v3.5.5: package ONLY the ABIs Flutter is building for. Plugins
+        // (e.g. androidx datastore) ship .so files for every ABI; without
+        // this filter the 32-bit APK contained a stray lib/arm64-v8a folder,
+        // so 64-bit phones picked arm64, found no libflutter.so and crashed.
+        ndk {
+            def abiMap = ['android-arm': 'armeabi-v7a', 'android-arm64': 'arm64-v8a',
+                          'android-x64': 'x86_64', 'android-x86': 'x86']
+            def platforms = (project.findProperty('target-platform')
+                    ?: 'android-arm,android-arm64,android-x64').toString()
+            abiFilters(*platforms.split(',').collect { abiMap[it.trim()] }.findAll { it })
+        }
+    }
+
+    signingConfigs {
+        release {
+            keyAlias = keystoreProperties['keyAlias']
+            keyPassword = keystoreProperties['keyPassword']
+            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword = keystoreProperties['storePassword']
+        }
+    }
+
+    buildTypes {
+        release {
+            // v5.0: real release signing (was debug-signed until now).
+            signingConfig = signingConfigs.release
+            // R8 shrinking keeps the APK small enough for easy distribution;
+            // AdMob/Billing ship their own keep rules.
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile('proguard-android-optimize.txt'),
+                'proguard-rules.pro'
+            )
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+// v5.0: lint-vital is unnecessary for this project and eats build memory.
+android.lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+}
