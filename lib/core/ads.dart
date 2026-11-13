@@ -39,7 +39,13 @@ class Ads {
   static bool _interstitialLoading = false;
   static bool _rewardedLoading = false;
 
-  static bool get adsRemoved => GameSave.instance.adsRemoved;
+  static bool get adsRemoved {
+    try {
+      return GameSave.instance.adsRemoved;
+    } catch (_) {
+      return false; // save not ready: never let ads crash a screen
+    }
+  }
 
   static Future<void> init() async {
     if (_initialized) return;
@@ -170,31 +176,55 @@ class _AdBannerState extends State<AdBanner> {
   bool _loaded = false;
   bool _failed = false;
 
+  bool _requested = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_banner == null && !Ads.adsRemoved) {
-      final width = MediaQuery.of(context).size.width.truncate();
-      final size = AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
-              width <= 0 ? 360 : width)
-          as AdSize?;
-      if (size != null) {
-        _banner = BannerAd(
-          adUnitId: AdConfig.bannerId,
-          size: size,
-          request: const AdRequest(),
-          listener: BannerAdListener(
-            onAdLoaded: (_) {
-              if (mounted) setState(() => _loaded = true);
-            },
-            onAdFailedToLoad: (_, __) {
-              if (mounted) setState(() => _failed = true);
-            },
-          ),
-        )..load();
-      } else {
-        _failed = true;
+    if (_requested || Ads.adsRemoved) return;
+    _requested = true;
+    _loadBanner(MediaQuery.of(context).size.width.truncate());
+  }
+
+  /// v3.5.5 FIX — grey screen after the splash. The adaptive size lookup
+  /// returns a Future; v5.0 cast that Future straight to `AdSize?`, which
+  /// threw a TypeError every time the banner was built. In release builds
+  /// Flutter replaces a widget that throws with a translucent grey box, and
+  /// inside the menu Column that box grew to cover the whole screen. The
+  /// size is now awaited, and any failure just hides the banner.
+  Future<void> _loadBanner(int width) async {
+    try {
+      final AdSize? size =
+          await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+              width <= 0 ? 360 : width);
+      if (!mounted || size == null) {
+        if (mounted) setState(() => _failed = true);
+        return;
       }
+      final banner = BannerAd(
+        adUnitId: AdConfig.bannerId,
+        size: size,
+        request: const AdRequest(),
+        listener: BannerAdListener(
+          onAdLoaded: (_) {
+            if (mounted) setState(() => _loaded = true);
+          },
+          onAdFailedToLoad: (ad, __) {
+            ad.dispose();
+            if (mounted) {
+              setState(() {
+                _failed = true;
+                _banner = null;
+              });
+            }
+          },
+        ),
+      );
+      _banner = banner;
+      await banner.load();
+    } catch (_) {
+      // Ads are optional: offline / no Play services / plugin errors.
+      if (mounted) setState(() => _failed = true);
     }
   }
 

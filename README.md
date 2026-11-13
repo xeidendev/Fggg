@@ -37,7 +37,14 @@ with a juicy, animated UI and **1000 levels**.
   difficulty cliff after level 10.
 - **minSdk 24** — Google Play's automatic protection rejects bundles with
   minSdkVersion below 24.
-- Version 3.5.5 (versionCode 355).
+- **Grey screen after the splash fixed.** `AdBanner` cast the Future
+  returned by `AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize` to
+  `AdSize?`, which threw on every build; in release builds Flutter shows a
+  widget that throws as a translucent grey box, which covered the whole
+  menu. The size is now awaited and any ad failure just hides the banner.
+  New `test/app_flow_test.dart` boots the real app (mocked plugins) through
+  splash, menu, level select, shop and game and fails on any build error.
+- Version 3.5.5 (versionCode 356).
 - **32-bit APK crash fix**: the build now packages only the ABIs being
   targeted (`ndk.abiFilters` from `target-platform`). Before, plugin `.so`
   files created a stray `lib/arm64-v8a` folder in the 32-bit APK, so 64-bit
